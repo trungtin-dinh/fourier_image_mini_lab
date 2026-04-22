@@ -1,0 +1,7 @@
+gradio
+numpy
+pillow
+matplotlib
+scipy
+scikit-image
+PyWavelets
