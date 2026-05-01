@@ -16,6 +16,17 @@ from skimage.restoration import (
 
 DEFAULT_IMAGE = data.coffee()
 
+# Pre-compute initial slider bounds from the default image (coffee, 400 × 600)
+_DEFAULT_H = DEFAULT_IMAGE.shape[0]   # 400
+_DEFAULT_W = DEFAULT_IMAGE.shape[1]   # 600
+_DEFAULT_MAX_RADIUS  = int(np.ceil(np.sqrt((_DEFAULT_H / 2.0) ** 2 + (_DEFAULT_W / 2.0) ** 2)))
+_DEFAULT_MAX_KERNEL  = min(_DEFAULT_H, _DEFAULT_W) - (1 - min(_DEFAULT_H, _DEFAULT_W) % 2)
+_DEFAULT_MAX_MOTION  = max(1, min(_DEFAULT_H, _DEFAULT_W))
+_DEFAULT_MAX_KUWAHARA = max(1, min(_DEFAULT_H, _DEFAULT_W) // 8)
+_DEFAULT_MAX_NOTCH_U = max(1, _DEFAULT_W // 2)
+_DEFAULT_MAX_NOTCH_V = max(1, _DEFAULT_H // 2)
+_DEFAULT_MAX_NOTCH_R = max(1, min(_DEFAULT_H, _DEFAULT_W) // 2)
+
 LINEAR_FILTERS = [
     "Low-pass",
     "High-pass",
@@ -110,7 +121,6 @@ def load_doc_fr_section(title: str) -> str:
 
 def load_doc_en_section(title: str) -> str:
     return DOC_EN_SECTIONS[title]
-
 
 
 def to_float_rgb(image):
@@ -418,8 +428,8 @@ def apply_nonlinear_filter(image_rgb, filter_name, kernel_size, sigma_spatial, s
     if filter_name == "Bilateral filter":
         output = denoise_bilateral(
             image_rgb,
-            sigma_spatial=max(0.01, float(sigma_spatial)),
-            sigma_color=max(0.0001, float(sigma_color)),
+            sigma_spatial=max(0.1, float(sigma_spatial)),
+            sigma_color=max(0.01, float(sigma_color)),
             channel_axis=-1,
         )
         return np.clip(output.astype(np.float32), 0.0, 1.0)
@@ -958,22 +968,22 @@ def apply_noise_removal(image_rgb, method,
         return np.clip(output, 0.0, 1.0)
 
     if method == "Gaussian filter":
-        sigma = max(0.01, float(gaussian_denoise_sigma))
+        sigma = max(0.1, float(gaussian_denoise_sigma))
         output = np.zeros_like(image_rgb, dtype=np.float32)
         for channel in range(3):
             output[:, :, channel] = gaussian_filter(image_rgb[:, :, channel], sigma=sigma)
         return np.clip(output, 0.0, 1.0)
 
     if method == "Total variation":
-        weight = max(0.0001, float(tv_weight))
+        weight = max(0.001, float(tv_weight))
         output = denoise_tv_chambolle(image_rgb, weight=weight, channel_axis=-1)
         return np.clip(output.astype(np.float32), 0.0, 1.0)
 
     if method == "Bilateral filter":
         output = denoise_bilateral(
             image_rgb,
-            sigma_spatial=max(0.01, float(bilateral_spatial)),
-            sigma_color=max(0.0001, float(bilateral_color)),
+            sigma_spatial=max(0.1, float(bilateral_spatial)),
+            sigma_color=max(0.01, float(bilateral_color)),
             channel_axis=-1,
         )
         return np.clip(output.astype(np.float32), 0.0, 1.0)
@@ -984,7 +994,7 @@ def apply_noise_removal(image_rgb, method,
     if method == "Non-local means":
         patch_size = odd_cap(nlm_patch_size)
         patch_distance = max(1, int(nlm_patch_distance))
-        h_value = max(0.0001, float(nlm_h))
+        h_value = max(0.001, float(nlm_h))
         output = denoise_nl_means(
             image_rgb,
             patch_size=patch_size,
@@ -996,7 +1006,7 @@ def apply_noise_removal(image_rgb, method,
         return np.clip(output.astype(np.float32), 0.0, 1.0)
 
     if method == "Wavelet denoise":
-        sigma = max(0.0001, float(wavelet_sigma))
+        sigma = max(0.001, float(wavelet_sigma))
         output = denoise_wavelet(
             image_rgb,
             sigma=sigma,
@@ -1017,7 +1027,7 @@ def apply_deblurring(image_rgb, method, psf_type,
     output = np.zeros_like(image_rgb, dtype=np.float32)
 
     if method == "Wiener":
-        balance = max(0.0001, float(wiener_balance))
+        balance = max(0.001, float(wiener_balance))
         for channel in range(3):
             output[:, :, channel] = wiener(image_rgb[:, :, channel], psf, balance=balance)
         return np.clip(output, 0.0, 1.0)
@@ -1100,14 +1110,14 @@ def reset_restoration_outputs():
     return None, None, None
 
 
-with gr.Blocks() as demo:
+with gr.Blocks(title="Fourier Image Lab") as demo:
     with gr.Tab("Filtering"):
         with gr.Row():
             with gr.Column():
                 fft_input = gr.Image(value=DEFAULT_IMAGE, type="numpy", label="Original image", height=320)
-                compute_fourier_btn = gr.Button("Fourier transform", variant="primary")
-            centered_spectrum = gr.Image(label="Centered spectrum", height=360)
-            phase_plot = gr.Image(label="Phase", height=360)
+                compute_fourier_btn = gr.Button("Compute Fourier transform", variant="primary")
+            centered_spectrum = gr.Image(label="Centered magnitude spectrum", height=360)
+            phase_plot = gr.Image(label="Phase spectrum", height=360)
 
         with gr.Row():
             with gr.Column(scale=1, variant="panel"):
@@ -1124,19 +1134,43 @@ with gr.Blocks() as demo:
                 )
                 apply_filter_btn = gr.Button("Apply filter", variant="primary")
 
-                cutoff1 = gr.Slider(1, 100, value=30, step=1, label="Cutoff 1")
-                cutoff2 = gr.Slider(1, 100, value=80, step=1, label="Cutoff 2", visible=False)
-                order = gr.Slider(1, 20, value=2, step=1, label="Butterworth order", visible=False)
-                notch_u = gr.Slider(-100, 100, value=32, step=1, label="Notch offset u", visible=False)
-                notch_v = gr.Slider(-100, 100, value=0, step=1, label="Notch offset v", visible=False)
-                notch_radius = gr.Slider(1, 100, value=10, step=1, label="Notch radius", visible=False)
-                kernel_size = gr.Slider(1, 21, value=3, step=1, label="Kernel size", visible=False)
-                sigma_spatial = gr.Slider(0.01, 100.0, value=5.0, step=0.01, label="Spatial sigma", visible=False)
-                sigma_color = gr.Slider(0.0001, 1.0, value=0.1, step=0.0001, label="Color sigma", visible=False)
+                cutoff1 = gr.Slider(
+                    1, _DEFAULT_MAX_RADIUS, value=30, step=1,
+                    label="Cutoff radius D₀ (frequency pixels)",
+                )
+                cutoff2 = gr.Slider(
+                    1, _DEFAULT_MAX_RADIUS, value=80, step=1,
+                    label="Cutoff radius D₁ (frequency pixels)", visible=False,
+                )
+                order = gr.Slider(1, 20, value=2, step=1, label="Butterworth order n", visible=False)
+                notch_u = gr.Slider(
+                    -_DEFAULT_MAX_NOTCH_U, _DEFAULT_MAX_NOTCH_U, value=32, step=1,
+                    label="Notch center u₀ (frequency pixels)", visible=False,
+                )
+                notch_v = gr.Slider(
+                    -_DEFAULT_MAX_NOTCH_V, _DEFAULT_MAX_NOTCH_V, value=0, step=1,
+                    label="Notch center v₀ (frequency pixels)", visible=False,
+                )
+                notch_radius = gr.Slider(
+                    1, _DEFAULT_MAX_NOTCH_R, value=10, step=1,
+                    label="Notch radius R (frequency pixels)", visible=False,
+                )
+                kernel_size = gr.Slider(
+                    1, _DEFAULT_MAX_KERNEL, value=3, step=1,
+                    label="Kernel size (odd)", visible=False,
+                )
+                sigma_spatial = gr.Slider(
+                    0.1, 30.0, value=5.0, step=0.1,
+                    label="Spatial sigma σs (pixels)", visible=False,
+                )
+                sigma_color = gr.Slider(
+                    0.01, 1.0, value=0.1, step=0.01,
+                    label="Color sigma σr (intensity)", visible=False,
+                )
 
-            live_mask = gr.Image(label="Mask", height=360)
-            filtered_spectrum = gr.Image(label="Filtered Fourier domain", height=360)
-            filtered_image = gr.Image(label="Result image", height=360)
+            live_mask = gr.Image(label="Frequency mask", height=360)
+            filtered_spectrum = gr.Image(label="Filtered image spectrum", height=360)
+            filtered_image = gr.Image(label="Filtered image", height=360)
 
         with gr.Row():
             with gr.Column(scale=1, variant="panel"):
@@ -1146,19 +1180,28 @@ with gr.Blocks() as demo:
                     label="Phase modification",
                     interactive=True,
                 )
-                quant_levels = gr.Slider(2, 64, value=8, step=1, label="Quantization levels", visible=False)
-                phase_noise_std = gr.Slider(0.0, np.pi, value=0.5, step=0.01, label="Phase noise std (rad)", visible=False)
+                quant_levels = gr.Slider(2, 64, value=8, step=1, label="Quantization levels L", visible=False)
+                phase_noise_std = gr.Slider(
+                    0.0, np.pi, value=0.5, step=0.01,
+                    label="Phase noise std σφ (rad)", visible=False,
+                )
                 random_seed = gr.Slider(0, 9999, value=0, step=1, label="Random seed", visible=False)
-                shift_x = gr.Slider(-512, 512, value=0, step=1, label="Shift x (pixels)", visible=False)
-                shift_y = gr.Slider(-512, 512, value=0, step=1, label="Shift y (pixels)", visible=False)
+                shift_x = gr.Slider(
+                    -_DEFAULT_W, _DEFAULT_W, value=0, step=1,
+                    label="Shift Δx (pixels)", visible=False,
+                )
+                shift_y = gr.Slider(
+                    -_DEFAULT_H, _DEFAULT_H, value=0, step=1,
+                    label="Shift Δy (pixels)", visible=False,
+                )
                 apply_phase_btn = gr.Button("Apply phase modification", variant="primary")
 
-            modified_phase_plot = gr.Image(label="Phase after modification", height=360)
-            phase_result_image = gr.Image(label="Result image", height=360)
+            modified_phase_plot = gr.Image(label="Phase spectrum after modification", height=360)
+            phase_result_image = gr.Image(label="Phase-modified image", height=360)
 
         with gr.Row():
             with gr.Column(scale=1, variant="panel"):
-                apply_both_btn = gr.Button("Apply frequency and phase modifications", variant="primary")
+                apply_both_btn = gr.Button("Apply filter + phase modification", variant="primary")
             combined_result_image = gr.Image(label="Combined result image", height=360)
 
         compute_fourier_btn.click(
@@ -1269,7 +1312,7 @@ with gr.Blocks() as demo:
             queue=False,
         )
 
-    with gr.Tab("Denoising and deblurring"):
+    with gr.Tab("Denoising & Deblurring"):
         degraded_state = gr.State(value=None)
 
         with gr.Row():
@@ -1281,11 +1324,11 @@ with gr.Blocks() as demo:
                     with gr.Column():
                         gaussian_noise_std = gr.Slider(
                             0.0, 1.0, value=0.03, step=0.001,
-                            label="Gaussian noise std", interactive=False
+                            label="Gaussian noise std σn", interactive=False,
                         )
                         salt_pepper_amount = gr.Slider(
                             0.0, 0.5, value=0.02, step=0.001,
-                            label="Salt and pepper amount", interactive=False
+                            label="Salt-and-pepper density ρ", interactive=False,
                         )
                         blur_type = gr.Dropdown(
                             choices=BLUR_TYPES,
@@ -1294,20 +1337,20 @@ with gr.Blocks() as demo:
                             interactive=False,
                         )
                         blur_kernel_size = gr.Slider(
-                            1, 21, value=9, step=1,
-                            label="Gaussian kernel size", interactive=False
+                            1, _DEFAULT_MAX_KERNEL, value=9, step=1,
+                            label="Gaussian PSF kernel size", interactive=False,
                         )
                         blur_sigma = gr.Slider(
-                            0.0, 100.0, value=2.0, step=0.01,
-                            label="Gaussian sigma", interactive=False
+                            0.1, 20.0, value=2.0, step=0.1,
+                            label="Gaussian PSF sigma σ", interactive=False,
                         )
                         degr_motion_length = gr.Slider(
-                            1, 101, value=15, step=1,
-                            label="Motion length", visible=False, interactive=False
+                            1, _DEFAULT_MAX_MOTION, value=15, step=1,
+                            label="Motion PSF length L (pixels)", visible=False, interactive=False,
                         )
                         degr_motion_angle = gr.Slider(
                             -180.0, 180.0, value=0.0, step=1.0,
-                            label="Motion angle (degrees)", visible=False, interactive=False
+                            label="Motion PSF angle θ (degrees)", visible=False, interactive=False,
                         )
                         apply_degradation_btn = gr.Button("Apply degradation", variant="primary", interactive=False)
                     degraded_image = gr.Image(label="Degraded image", height=300)
@@ -1322,44 +1365,44 @@ with gr.Blocks() as demo:
                     interactive=False,
                 )
                 median_kernel_size = gr.Slider(
-                    1, 21, value=3, step=1,
-                    label="Median kernel size", visible=True, interactive=False
+                    1, _DEFAULT_MAX_KERNEL, value=3, step=1,
+                    label="Median kernel size (odd)", visible=True, interactive=False,
                 )
                 gaussian_denoise_sigma = gr.Slider(
-                    0.01, 100.0, value=1.0, step=0.01,
-                    label="Gaussian sigma", visible=False, interactive=False
+                    0.1, 20.0, value=1.0, step=0.1,
+                    label="Gaussian sigma σ", visible=False, interactive=False,
                 )
                 tv_weight = gr.Slider(
-                    0.0001, 10.0, value=0.08, step=0.0001,
-                    label="TV weight", visible=False, interactive=False
+                    0.001, 1.0, value=0.08, step=0.001,
+                    label="TV weight λ", visible=False, interactive=False,
                 )
                 bilateral_spatial = gr.Slider(
-                    0.01, 100.0, value=5.0, step=0.01,
-                    label="Bilateral spatial sigma", visible=False, interactive=False
+                    0.1, 30.0, value=5.0, step=0.1,
+                    label="Bilateral spatial sigma σs", visible=False, interactive=False,
                 )
                 bilateral_color = gr.Slider(
-                    0.0001, 1.0, value=0.1, step=0.0001,
-                    label="Bilateral color sigma", visible=False, interactive=False
+                    0.01, 1.0, value=0.1, step=0.01,
+                    label="Bilateral color sigma σr", visible=False, interactive=False,
                 )
                 kuwahara_radius = gr.Slider(
-                    1, 32, value=2, step=1,
-                    label="Kuwahara radius", visible=False, interactive=False
+                    1, _DEFAULT_MAX_KUWAHARA, value=2, step=1,
+                    label="Kuwahara radius r", visible=False, interactive=False,
                 )
                 nlm_patch_size = gr.Slider(
-                    1, 31, value=5, step=1,
-                    label="NLM patch size", visible=False, interactive=False
+                    1, 11, value=5, step=1,
+                    label="NLM patch size p", visible=False, interactive=False,
                 )
                 nlm_patch_distance = gr.Slider(
-                    1, 50, value=6, step=1,
-                    label="NLM patch distance", visible=False, interactive=False
+                    1, 20, value=6, step=1,
+                    label="NLM patch search distance", visible=False, interactive=False,
                 )
                 nlm_h = gr.Slider(
-                    0.0001, 1.0, value=0.08, step=0.0001,
-                    label="NLM h", visible=False, interactive=False
+                    0.001, 1.0, value=0.08, step=0.001,
+                    label="NLM filter parameter h", visible=False, interactive=False,
                 )
                 wavelet_sigma = gr.Slider(
-                    0.0001, 1.0, value=0.08, step=0.0001,
-                    label="Wavelet sigma", visible=False, interactive=False
+                    0.001, 1.0, value=0.08, step=0.001,
+                    label="Wavelet noise sigma σn", visible=False, interactive=False,
                 )
                 apply_noise_btn = gr.Button("Apply noise removal", variant="primary", interactive=False)
 
@@ -1378,32 +1421,32 @@ with gr.Blocks() as demo:
                     interactive=False,
                 )
                 psf_kernel_size = gr.Slider(
-                    1, 21, value=9, step=1,
-                    label="Gaussian PSF kernel size", interactive=False
+                    1, _DEFAULT_MAX_KERNEL, value=9, step=1,
+                    label="Gaussian PSF kernel size", interactive=False,
                 )
                 psf_sigma = gr.Slider(
-                    0.01, 100.0, value=2.0, step=0.01,
-                    label="Gaussian PSF sigma", interactive=False
+                    0.1, 20.0, value=2.0, step=0.1,
+                    label="Gaussian PSF sigma σ", interactive=False,
                 )
                 deblur_motion_length = gr.Slider(
-                    1, 101, value=15, step=1,
-                    label="Motion PSF length", visible=False, interactive=False
+                    1, _DEFAULT_MAX_MOTION, value=15, step=1,
+                    label="Motion PSF length L (pixels)", visible=False, interactive=False,
                 )
                 deblur_motion_angle = gr.Slider(
                     -180.0, 180.0, value=0.0, step=1.0,
-                    label="Motion PSF angle (degrees)", visible=False, interactive=False
+                    label="Motion PSF angle θ (degrees)", visible=False, interactive=False,
                 )
                 wiener_balance = gr.Slider(
-                    0.0001, 10.0, value=0.05, step=0.0001,
-                    label="Wiener balance", interactive=False
+                    0.001, 10.0, value=0.05, step=0.001,
+                    label="Wiener balance K (NSR)", interactive=False,
                 )
                 rl_iterations = gr.Slider(
-                    1, 200, value=20, step=1,
-                    label="Richardson-Lucy iterations", visible=False, interactive=False
+                    1, 100, value=20, step=1,
+                    label="Richardson-Lucy iterations", visible=False, interactive=False,
                 )
                 apply_deblur_btn = gr.Button("Apply deblurring", variant="primary", interactive=False)
 
-            restored_image = gr.Image(label="Result image", height=340)
+        restored_image = gr.Image(label="Restored image", height=340)
 
         use_degradation.change(
             fn=update_degradation_controls,
@@ -1603,7 +1646,7 @@ with gr.Blocks() as demo:
 
     with gr.Tab("Documentation FR"):
         with gr.Row():
-            with gr.Column(scale=1):
+            with gr.Column(scale=0.5):
                 doc_fr_buttons = []
                 for title in DOC_FR_TITLES:
                     btn = gr.Button(title)
@@ -1612,7 +1655,7 @@ with gr.Blocks() as demo:
             with gr.Column(scale=3):
                 doc_fr_view = gr.Markdown(
                     value=load_doc_fr_section(DOC_FR_TITLES[0]),
-                    latex_delimiters=LATEX_DELIMITERS
+                    latex_delimiters=LATEX_DELIMITERS,
                 )
 
         for btn, title in doc_fr_buttons:
@@ -1624,7 +1667,7 @@ with gr.Blocks() as demo:
 
     with gr.Tab("Documentation EN"):
         with gr.Row():
-            with gr.Column(scale=1):
+            with gr.Column(scale=0.5):
                 doc_en_buttons = []
                 for title in DOC_EN_TITLES:
                     btn = gr.Button(title)
@@ -1633,7 +1676,7 @@ with gr.Blocks() as demo:
             with gr.Column(scale=3):
                 doc_en_view = gr.Markdown(
                     value=load_doc_en_section(DOC_EN_TITLES[0]),
-                    latex_delimiters=LATEX_DELIMITERS
+                    latex_delimiters=LATEX_DELIMITERS,
                 )
 
         for btn, title in doc_en_buttons:
@@ -1642,6 +1685,6 @@ with gr.Blocks() as demo:
                 inputs=None,
                 outputs=doc_en_view,
             )
-            
+
 if __name__ == "__main__":
     demo.launch()

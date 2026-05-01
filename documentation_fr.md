@@ -272,7 +272,7 @@ $$g_{\text{phase}}(x, y) = \mathcal{F}^{-1}\{G_{\text{phase}}\}(x, y)$$
 
 Toute l'information d'amplitude est supprimée ; seule la structure de phase est conservée. La reconstruction $g_{\text{phase}}$ est normalisée pour l'affichage. Résultat empirique : les **contours et la structure géométrique** des objets sont clairement reconnaissables, bien que les niveaux de gris et les textures soient altérés. Cela démontre que la **phase encode l'information structurelle** (positions des discontinuités, alignements).
 
-### 8.3 Reconstruction Amplitude Seule
+### 8.3 Reconstruction par Amplitude Seule
 
 $$G_{\text{amp}}(u, v) = A(u, v) \qquad \text{(phase uniformément mise à zéro)}$$
 
@@ -280,7 +280,7 @@ $$g_{\text{amp}}(x, y) = \mathcal{F}^{-1}\{A(u,v)\}(x, y)$$
 
 En annulant toute la phase, on perd la structure spatiale. Comme $A(u,v) \geq 0$ est réel, sa transformée inverse est à symétrie hermitienne et présente des artefacts caractéristiques (concentration de l'énergie autour du centre spatial). L'image est méconnaissable. Ce résultat — symétrique de 8.2 — confirme que l'amplitude contient les **statistiques spectrales** (distribution d'énergie par fréquence) mais pas l'organisation spatiale.
 
-### 8.4 Phase Aléatoire
+### 8.4 Reconstruction à Phase Aléatoire
 
 La phase est remplacée par un champ uniforme aléatoire $\phi_{\text{rand}}(u, v) \sim \mathcal{U}(-\pi, +\pi)$, indépendant pour chaque coefficient :
 
@@ -403,7 +403,7 @@ Pour une image bruitée $f = s + \eta$ où $\eta \sim \mathcal{N}(0, \sigma_n^2)
 
 Cette **parcimonie** des coefficients du signal est le principe fondamental de l'approche ondelettes : un **seuillage** des coefficients (conserver les grands, mettre les petits à zéro) élimine sélectivement le bruit en préservant le signal.
 
-L'app utilise la méthode **BayesShrink** (Chang, Yu & Vetterli, 2000), qui estime adapativement le seuil optimal pour chaque sous-bande à partir de la variance locale des coefficients :
+L'app utilise la méthode **BayesShrink** (Chang, Yu & Vetterli, 2000), qui estime adaptativement le seuil optimal pour chaque sous-bande à partir de la variance locale des coefficients :
 
 $$\hat{\sigma}_s = \sqrt{\max\!\left(0, \hat{\sigma}_y^2 - \sigma_n^2\right)}, \qquad \tau_k = \frac{\sigma_n^2}{\hat{\sigma}_{s,k}}$$
 

@@ -272,7 +272,7 @@ $$g_{\text{phase}}(x, y) = \mathcal{F}^{-1}\{G_{\text{phase}}\}(x, y)$$
 
 All amplitude information is removed; only the phase structure is retained. The reconstruction $g_{\text{phase}}$ is normalized for display. Empirical result: the **edges and geometric structure** of objects remain clearly recognizable, although gray levels and textures are altered. This demonstrates that **phase encodes structural information**, namely the positions of discontinuities and alignments.
 
-### 8.3 Amplitude-Only Reconstruction
+### 8.3 Magnitude-Only Reconstruction
 
 $$G_{\text{amp}}(u, v) = A(u, v) \qquad \text{(phase uniformly set to zero)}$$
 
@@ -280,7 +280,7 @@ $$g_{\text{amp}}(x, y) = \mathcal{F}^{-1}\{A(u,v)\}(x, y)$$
 
 By canceling all phase information, spatial structure is lost. Since $A(u,v) \geq 0$ is real, its inverse transform has Hermitian symmetry and exhibits characteristic artifacts, namely concentration of energy around the spatial center. The image becomes unrecognizable. This result, symmetric to 8.2, confirms that amplitude contains the **spectral statistics** (energy distribution across frequencies), but not the spatial organization.
 
-### 8.4 Random Phase
+### 8.4 Random Phase Reconstruction
 
 Phase is replaced by a uniformly random field $\phi_{\text{rand}}(u, v) \sim \mathcal{U}(-\pi, +\pi)$, independently for each coefficient:
 
