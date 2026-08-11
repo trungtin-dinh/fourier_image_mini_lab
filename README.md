@@ -1,17 +1,4 @@
----
-title: Fourier Image Mini Lab
-emoji: 🚀
-colorFrom: green
-colorTo: gray
-sdk: gradio
-sdk_version: 6.13.0
-app_file: app.py
-pinned: false
-license: mit
-short_description: Interactive Fourier filtering, denoising and deblurring app
----
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/trungtin-dinh/fourier_image_mini_lab)
 
 # Fourier Image Mini Lab
 
